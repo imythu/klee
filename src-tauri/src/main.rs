@@ -114,6 +114,7 @@ where
     let on_press = Arc::clone(&Arc::new(Mutex::new(on_press)));
     let on_escape = Arc::clone(&Arc::new(Mutex::new(on_escape)));
     let keys = Arc::clone(&Arc::new(Mutex::new(keys)));
+
     thread::spawn(move || {
         for &key in &(*keys.lock().unwrap()) {
             // 每个按键绑定按下事件
@@ -121,6 +122,7 @@ where
             let app_handle = Arc::clone(&app_handle);
             let on_press = Arc::clone(&on_press);
             let keys = Arc::clone(&keys);
+
             key.bind(move || {
                 println!("key: {:?}", key);
                 let mut pressed = pressed_keys_clone.lock().unwrap();
@@ -141,5 +143,12 @@ where
             let app_handle = Arc::clone(&app_handle);
             on_escape.lock().unwrap()(app_handle);
         });
+
+        // 需要调用 inputbot 的事件处理函数
+        loop {
+            inputbot::handle_input_events();
+            std::thread::sleep(std::time::Duration::from_millis(10));  // 防止 CPU 过度消耗
+        }
     });
 }
+
