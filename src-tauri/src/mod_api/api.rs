@@ -41,6 +41,12 @@ pub fn paste_into_current_window(text: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub(crate) fn search(text: String) -> Result<(), String> {
+    println!("search: {}", &text);
+    Ok(())
+}
+
 fn stringify<E: std::fmt::Debug>(e: E) -> String {
     format!("{:?}", e)
 }

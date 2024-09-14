@@ -37,7 +37,7 @@ export class TauriClient {
             })
     }
 
-    static search(text: string): Promise<ApiResponse<TextVO[]>> {
+        static search(text: string): Promise<ApiResponse<TextVO[]>> {
         return invoke<ApiResponse<TextVO[]>>('search', {
             text: text
         });

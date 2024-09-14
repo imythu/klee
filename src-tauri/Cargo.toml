@@ -18,7 +18,7 @@ sqlite = "0.36.1"
 rdev = { git = "https://github.com/fufesou/rdev" }
 #rdev = "0.5.3"
 arboard = "3.4.0"
-inputbot = "0.6.0"
+#inputbot = "0.6.0"
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!

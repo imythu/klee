@@ -1,13 +1,11 @@
-use std::collections::HashSet;
 use crate::mod_api::api;
+use crate::mod_system::system_utils;
+use rdev::Key::Escape;
 use rdev::{listen, EventType, Key};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use inputbot::KeybdKey;
-use inputbot::KeybdKey::{EscapeKey, LAltKey, LShiftKey};
-use rdev::Key::Escape;
 use tauri::{AppHandle, CustomMenuItem, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem};
-use crate::mod_system::system_utils;
 
 mod mod_api;
 mod mod_system;
@@ -27,7 +25,7 @@ fn main() {
             if system_utils::is_mac_os() {
                 listen_on_macos(app_handle, on_key_press, on_escape);
             } else if system_utils::is_windows() {
-                listen_on_windows(vec![LAltKey, LAltKey], app_handle, on_key_press, on_escape);
+                // listen_on_windows(vec![LAltKey, LAltKey], app_handle, on_key_press, on_escape);
             }
             Ok(())
         })
@@ -40,7 +38,7 @@ fn on_key_press(app_handle: Arc<Mutex<AppHandle>>) {
     tauri::WindowBuilder::new(
         &(*handle),
         "search_input", /* the unique window label */
-        tauri::WindowUrl::App("tauri://localhost/search-box".parse().unwrap()),
+        tauri::WindowUrl::App("search-box".into()),
     )
         .title("Input Window")
         .resizable(false)
@@ -104,51 +102,4 @@ where
     });
 }
 
-fn listen_on_windows<F1, F2>(keys: Vec<KeybdKey>, app_handle: Arc<Mutex<AppHandle>>, on_press: F1, on_escape: F2)
-where
-    F1: Fn(Arc<Mutex<AppHandle>>) + Send + 'static,
-    F2: Fn(Arc<Mutex<AppHandle>>) + Send + 'static,
-{
-    let pressed_keys = Arc::new(Mutex::new(HashSet::new()));
-    let app_handle = Arc::clone(&app_handle);
-    let on_press = Arc::clone(&Arc::new(Mutex::new(on_press)));
-    let on_escape = Arc::clone(&Arc::new(Mutex::new(on_escape)));
-    let keys = Arc::clone(&Arc::new(Mutex::new(keys)));
-
-    thread::spawn(move || {
-        for &key in &(*keys.lock().unwrap()) {
-            // 每个按键绑定按下事件
-            let pressed_keys_clone = Arc::clone(&pressed_keys);
-            let app_handle = Arc::clone(&app_handle);
-            let on_press = Arc::clone(&on_press);
-            let keys = Arc::clone(&keys);
-
-            key.bind(move || {
-                println!("key: {:?}", key);
-                let mut pressed = pressed_keys_clone.lock().unwrap();
-                pressed.insert(key);
-
-                // 检查所有组合键是否都被按下
-                if keys.lock().unwrap().iter().all(|k| pressed.contains(k)) {
-                    let app_handle = Arc::clone(&app_handle);
-                    on_press.lock().unwrap()(app_handle); // 触发回调
-                    pressed.clear();
-                }
-            });
-        }
-
-        let app_handle = Arc::clone(&app_handle);
-        let on_escape = Arc::clone(&on_escape);
-        EscapeKey.bind(move || {
-            let app_handle = Arc::clone(&app_handle);
-            on_escape.lock().unwrap()(app_handle);
-        });
-
-        // 需要调用 inputbot 的事件处理函数
-        loop {
-            inputbot::handle_input_events();
-            std::thread::sleep(std::time::Duration::from_millis(10));  // 防止 CPU 过度消耗
-        }
-    });
-}
 
