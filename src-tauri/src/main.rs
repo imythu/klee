@@ -2,15 +2,21 @@ use crate::mod_api::api;
 use crate::mod_system::system_utils;
 use rdev::Key::Escape;
 use rdev::{listen, EventType, Key};
+use rusqlite::Connection;
 use std::collections::HashSet;
+use std::fs::File;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use tauri::{AppHandle, CustomMenuItem, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem};
+use tauri::{AppHandle, CustomMenuItem, Manager, PathResolver, SystemTray, SystemTrayMenu, SystemTrayMenuItem};
+use crate::mod_db::sqlite_utils::make_sure_sqlite_file_exists;
 
 mod mod_api;
 mod mod_system;
+mod mod_domain;
+mod mod_db;
 
 fn main() {
+    make_sure_sqlite_file_exists();
     let tray_menu = SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("console".to_string(), "打开控制台"))
         .add_native_item(SystemTrayMenuItem::Separator)

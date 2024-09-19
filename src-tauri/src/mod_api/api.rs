@@ -1,5 +1,7 @@
+use crate::mod_domain::text::Text;
 use crate::mod_system::system_utils;
 use arboard::Clipboard;
+use diesel::{SelectableHelper, TextExpressionMethods};
 use std::process::Command;
 
 #[tauri::command]
@@ -43,7 +45,17 @@ pub fn paste_into_current_window(text: String) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn search(text: String) -> Result<(), String> {
+    if text.is_empty() {
+        return Ok(());
+    }
     println!("search: {}", &text);
+    let mut query_str = String::new();
+    for c in text.chars() {
+        query_str.push_str(&format!("%{}", c));
+    }
+    query_str.push_str("%");
+    println!("query_str: {}", &query_str);
+    t_text::search(&query_str)?;
     Ok(())
 }
 
