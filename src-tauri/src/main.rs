@@ -8,9 +8,14 @@ use inputbot::KeybdKey::{EscapeKey, LAltKey, LShiftKey};
 use rdev::Key::Escape;
 use tauri::{AppHandle, CustomMenuItem, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem};
 use crate::mod_system::system_utils;
+use std::ffi::{c_int, c_ulonglong, c_ushort};
+use std::collections::BTreeSet;
 
 mod mod_api;
 mod mod_system;
+
+#[cfg(target_os = "windows")]
+mod key_inter;
 
 fn main() {
     let tray_menu = SystemTrayMenu::new()
@@ -27,7 +32,12 @@ fn main() {
             if system_utils::is_mac_os() {
                 listen_on_macos(app_handle, on_key_press, on_escape);
             } else if system_utils::is_windows() {
-                listen_on_windows(vec![LAltKey, LAltKey], app_handle, on_key_press, on_escape);
+                if cfg!(windows)
+                {
+                    unsafe {
+                        key_inter::register_filter(keycode_set!([key_inter::KeyCode::KEY_LCONTROL, key_inter::KeyCode::KEY_O]), rust_filter_callback);
+                    }
+                }
             }
             Ok(())
         })
@@ -103,6 +113,22 @@ where
         }).unwrap();
     });
 }
+
+// Rust 的回调函数
+extern "C" fn rust_filter_callback(value: c_ulonglong) -> c_ushort {
+    println!("Rust: filter Callback received value: {}", value);
+    unsafe {
+        if key_inter::iskeyintag(value, key_inter::KeyCode::KEY_LCONTROL as i32) {
+            println!("Rust: filter Callback received Control Key");
+        }
+
+        if key_inter::iskeyintag(value, key_inter::KeyCode::KEY_O as i32) {
+            println!("Rust: filter Callback received O Key");
+        }
+    }
+    return 1;
+}
+
 
 fn listen_on_windows<F1, F2>(keys: Vec<KeybdKey>, app_handle: Arc<Mutex<AppHandle>>, on_press: F1, on_escape: F2)
 where
