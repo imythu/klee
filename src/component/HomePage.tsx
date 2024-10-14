@@ -6,7 +6,7 @@ import {useState} from "react";
 export default function HomePage() {
     const [currentTab, setCurrentTab] = useState("textConfig");
     return (
-        <div className="flex h-screen bg-gray-50">
+        <div className="flex w-dvw h-dvh">
             {/* 左侧菜单 */}
             <div className="w-1/5 border-r border-gray-200 p-6">
                 <Menu currentTab={currentTab} setCurrentTab={setCurrentTab}/>

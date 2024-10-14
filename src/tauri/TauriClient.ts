@@ -1,5 +1,5 @@
 // When using the Tauri API npm package:
-import {invoke} from '@tauri-apps/api/tauri'
+import {invoke} from '@tauri-apps/api/core'
 import {Event, listen} from '@tauri-apps/api/event'
 
 import React from "react";

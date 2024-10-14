@@ -1,111 +1,115 @@
 use crate::mod_api::api;
-use crate::mod_system::system_utils;
-use rdev::Key::Escape;
-use rdev::{listen, EventType, Key};
-use rusqlite::Connection;
-use std::collections::HashSet;
-use std::fs::File;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use tauri::{AppHandle, CustomMenuItem, Manager, PathResolver, SystemTray, SystemTrayMenu, SystemTrayMenuItem};
 use crate::mod_db::sqlite_utils::make_sure_sqlite_file_exists;
+use rdev::EventType;
+use tauri::menu::{Menu, MenuItem};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::utils::config::WindowEffectsConfig;
+use tauri_plugin_global_shortcut::Error::GlobalHotkey;
+use tauri_plugin_global_shortcut::{ShortcutEvent, ShortcutState};
 
 mod mod_api;
-mod mod_system;
-mod mod_domain;
 mod mod_db;
+mod mod_domain;
+mod mod_system;
+const SEARCH_BOX_NAME: &str = "search-box";
 
 fn main() {
-    make_sure_sqlite_file_exists();
-    let tray_menu = SystemTrayMenu::new()
-        .add_item(CustomMenuItem::new("console".to_string(), "打开控制台"))
-        .add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(CustomMenuItem::new("quit".to_string(), "退出"));
-
-    let tray = SystemTray::new().with_menu(tray_menu);
     tauri::Builder::default()
-        .system_tray(tray)
-        .invoke_handler(tauri::generate_handler![api::copy_to_clipboard, api::paste_into_current_window])
         .setup(|app| {
-            let app_handle = Arc::clone(&Arc::new(Mutex::new(app.handle())));
-            if system_utils::is_mac_os() {
-                listen_on_macos(app_handle, on_key_press, on_escape);
-            } else if system_utils::is_windows() {
-                // listen_on_windows(vec![LAltKey, LAltKey], app_handle, on_key_press, on_escape);
+            make_sure_sqlite_file_exists(app.handle());
+            let quit_i = MenuItem::with_id(app,
+                                           "quit", "退出", true, None::<&str>)?;
+            let console = MenuItem::with_id(app,
+                                            "console", "打开控制台", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&console, &quit_i])?;
+            tauri::tray::TrayIconBuilder::new()
+                .menu_on_left_click(true)
+                .menu(&menu)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "quit" => {
+                        println!("quit menu item was clicked");
+                        app.exit(0);
+                    }
+                    "console" => {
+                        println!("console menu item was clicked");
+                        app.get_window("main").unwrap().show().unwrap()
+                    }
+                    _ => {
+                        println!("menu item {:?} not handled", event.id);
+                    }
+                }
+                )
+                .build(app)?;
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+
+                let search_box_shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
+                let esc_shortcut = Shortcut::new(None, Code::Escape);
+                app.handle().plugin(
+                    tauri_plugin_global_shortcut::Builder::new()
+                        .build(),
+                )?;
+                app.global_shortcut()
+                    .on_shortcut(esc_shortcut,
+                                 move |app, shortcut, event| {
+                                     if event.state() != ShortcutState::Pressed {
+                                         return;
+                                     }
+                                     destroy_search_box(app);
+                                 }).unwrap();
+
+                app.global_shortcut()
+                    .on_shortcut(search_box_shortcut,
+                                 move |app, shortcut, event| {
+                                     if event.state() != ShortcutState::Pressed {
+                                         return;
+                                     }
+
+                                     on_key_press(app);
+                                 }).unwrap();
             }
+
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![
+            api::copy_to_clipboard,
+            api::paste_into_current_window
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-fn on_key_press(app_handle: Arc<Mutex<AppHandle>>) {
-    let handle = app_handle.lock().unwrap();
-    tauri::WindowBuilder::new(
-        &(*handle),
-        "search_input", /* the unique window label */
-        tauri::WindowUrl::App("search-box".into()),
-    )
-        .title("Input Window")
-        .resizable(false)
-        .decorations(false)  // 无边框
-        // .transparent(true)    // 透明
-        .always_on_top(true)  // 保持在最前
-        .inner_size(400.0, 100.0) // 大小
-        .build()
-        .unwrap();
+fn on_key_press(app_handle: &AppHandle) {
+    let option = app_handle.get_window(SEARCH_BOX_NAME);
+    match option {
+        None => {
+            WebviewWindowBuilder::new(app_handle, SEARCH_BOX_NAME, WebviewUrl::App(SEARCH_BOX_NAME.into()))
+                .title("Input Window")
+                .resizable(false)
+                .decorations(false)
+                .inner_size(768.0, 96.0)
+                // .transparent(true)    // 透明
+                .always_on_top(true) // 大小
+                .build()
+                .unwrap();
+        }
+        Some(window) => {
+            if window.is_visible().unwrap_or(false) {
+                window.hide().unwrap();
+            } else {
+                window.show().unwrap();
+            }
+        }
+    }
 }
 
-fn on_escape(app_handle: Arc<Mutex<AppHandle>>) {
-    let handle = app_handle.lock().unwrap();
-    let search_input_window = (*handle).get_window("search_input");
+fn destroy_search_box(app_handle: &AppHandle) {
+    let search_input_window = app_handle.get_window(SEARCH_BOX_NAME);
     match search_input_window {
         Some(window) => {
-            window.close().unwrap();
+            window.hide().unwrap();
         }
         None => {}
     }
 }
-
-fn listen_on_macos<F1, F2>(app_handle: Arc<Mutex<AppHandle>>, on_press: F1, on_escape: F2)
-where
-    F1: Fn(Arc<Mutex<AppHandle>>) + Send + 'static,
-    F2: Fn(Arc<Mutex<AppHandle>>) + Send + 'static,
-{
-    let app_handle = Arc::clone(&app_handle);
-    // 在主线程中监听事件
-    thread::spawn(move || {
-        let key_sequence = Arc::new(Mutex::new(Vec::new()));
-        let key_sequence_clone = Arc::clone(&key_sequence);
-        let app_handle = Arc::clone(&app_handle);
-        listen(move |event| {
-            match event.event_type {
-                EventType::KeyPress(key) => {
-                    println!("key: {:?}", key);
-                    if key == Escape {
-                        let app_handle = Arc::clone(&app_handle);
-                        on_escape(app_handle);
-                        return;
-                    }
-                    let mut seq = key_sequence_clone.lock().unwrap();
-                    seq.push(key);
-
-                    if seq.len() > 3 {
-                        seq.remove(0); // 保持序列长度为 3
-                    }
-
-                    if *seq == vec![Key::ShiftLeft, Key::KeyJ, Key::KeyJ]
-                        || *seq == vec![Key::ShiftRight, Key::KeyJ, Key::KeyJ]
-                    {
-                        let app_handle = Arc::clone(&app_handle);
-                        on_press(app_handle);
-                        seq.clear(); // 清空序列
-                    }
-                }
-                _ => (),
-            }
-        }).unwrap();
-    });
-}
-
-

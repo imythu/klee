@@ -1,7 +1,5 @@
-use crate::mod_domain::text::Text;
 use crate::mod_system::system_utils;
 use arboard::Clipboard;
-use diesel::{SelectableHelper, TextExpressionMethods};
 use std::process::Command;
 
 #[tauri::command]
@@ -29,7 +27,10 @@ pub fn paste_into_current_window(text: String) -> Result<(), String> {
             .output()
             .map_err(stringify)?;
     } else if system_utils::is_mac_os() {
-        let applescript = format!(r#"tell application "System Events" to keystroke "{}""#, &text);
+        let applescript = format!(
+            r#"tell application "System Events" to keystroke "{}""#,
+            &text
+        );
         Command::new("osascript")
             .arg("-e")
             .arg(applescript)
@@ -55,7 +56,6 @@ pub(crate) fn search(text: String) -> Result<(), String> {
     }
     query_str.push_str("%");
     println!("query_str: {}", &query_str);
-    t_text::search(&query_str)?;
     Ok(())
 }
 

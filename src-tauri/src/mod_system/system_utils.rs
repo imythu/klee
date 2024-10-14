@@ -1,4 +1,3 @@
-
 pub fn is_mac_os() -> bool {
     cfg!(target_os = "macos")
 }
